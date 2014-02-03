@@ -1,0 +1,20 @@
+SQL
+
+SELECT 
+
+GET
+
+SELECT Messages.text Users.id Rooms.name
+FROM Messages
+FULL OUTER JOIN Users
+ON Messages.Id_Users=Users.Id
+FULL OUTER JOIN Rooms
+ON Messages.id_Rooms=Rooms.Id
+
+POST
+INSERT INTO MESSAGES
+SELECT column_name(s)
+FROM table1
+FULL OUTER JOIN table2
+ON table1.column_name=table2.column_name;
+

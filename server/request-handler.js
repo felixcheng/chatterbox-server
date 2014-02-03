@@ -10,6 +10,7 @@
 var url = require( "url" );
 var fs = require("fs");
 var path = require("path");
+var allMessages = [];
 
 var defaultCorsHeaders = {
   "access-control-allow-origin": "*",
@@ -38,105 +39,98 @@ var sendUrlResponse = function(url, response){
   file.pipe(response);
 }
 
-var initializeMessages = function() {
-  var messages;
-  var filePath = path.join(__dirname + "/client/messages.json");
-
-  fs.readFile(filePath, {encoding: 'utf-8'}, function(error, data) {
-    if(error) {
-      console.log('ERROR READING FILE');
-      msg = [];
-    } else {
-      msg = JSON.parse(data);
-    }
-  });
-
+var sendResponse = function(statusCode, content, response) {
+  var headers = defaultCorsHeaders;
+  headers['Content-Type'] = "text/plain";
+  response.writeHead(statusCode, headers);
+  response.end(content);
 };
 
-var writeMessage = function(msg) {
+var initializeMessages = function(){
+  fs.readFile(path.join(__dirname + "/client/messages.json"), {encoding: 'utf-8'}, function(error, data) {
+    if (error) {
+      console.log('ERROR READING FILE');
+    } else {
+      allMessages = JSON.parse(data);
+    }
+  });
+};
+
+var writeMessage = function(newMessage) {
   var filepath = path.join(__dirname + "/client/messages.json");
-  var messagesData;
+  allMessages.push(newMessage);
 
-  fs.readFile(filepath, {encoding: 'utf-8'}, function(error, data) {
-    if(error) {
-      console.log('ERROR READING FILE');
-      messagesData = [];
+  fs.writeFile(filepath, JSON.stringify(allMessages), {encoding: 'utf-8'}, function(err, data) {
+    if(err) {
+      console.log("Error: " + err);
     } else {
-      messagesData = JSON.parse(data);
+      console.log("File saved");
     }
-    messagesData.push(msg);
-    msgJson = JSON.stringify(messagesData);
-
-    fs.writeFile(filepath, msgJson, {encoding: 'utf-8'}, function(err, data) {
-      if(err) {
-        console.log("Error: " + error);
-      } else {
-        console.log("File saved");
-      }
-    });
-
   });
-
 };
 
-var msg;
+var postMsg = function(request, response){  
+  var body = '';
+  request.on('data', function (data) {
+    body += data;
+  });
+
+  request.on('end', function () {
+    writeMessage(JSON.parse(body));
+  });
+  sendResponse(200, "Hello world!", response);
+}
+
+var getMsg = function(request, response){
+  response.writeHead(200, {
+    'Content-Type': 'text/html'
+  });
+  var file = fs.createReadStream(__dirname + "/client/index.html");
+  file.pipe(response);
+
+}
+
+var otherResponse= function(link, response){
+  if (contentT[link]){
+    sendUrlResponse(link, response); 
+  } else {
+    sendResponse(404, "Resource not found", response);
+  }
+}
+
 initializeMessages();
 
 var handleRequest = function(request, response) {
   /* the 'request' argument comes from nodes http module. It includes info about the
   request - such as what URL the browser is requesting. */
-  console.log('Messages in handleRequest function');
-  // msg = msg || [];
-  console.log(msg);
 
-   var sendResponse = function(statusCode, content) {
-      var headers = defaultCorsHeaders;
-      headers['Content-Type'] = "text/plain";
-      response.writeHead(statusCode, headers);
-      response.end(content);
-   };
    var coreUrl = url.parse(request.url);
    var urlPath = coreUrl.pathname;
 
   /* Documentation for both request and response can be found at
    * http://nodemanual.org/0.8.14/nodejs_ref_guide/http.html */
+  
   if (urlPath === '/1/classes/chatterbox'){
     if(request.method === 'POST'){
+      postMsg(request, response);
+    }
 
-      var body = '';
-      request.on('data', function (data) {
-        body += data;
-      });
-
-      request.on('end', function () {
-        var POST = JSON.parse(body);
-        msg.push(POST);
-        writeMessage(POST);
-      });
-      sendResponse(200, "Hello world!");
-    } 
     else if (request.method === 'GET') {
-      var msgJson = JSON.stringify(msg);
-      sendResponse(200, msgJson);
+      var msgJson = JSON.stringify(allMessages);
+      sendResponse(200, msgJson, response);
     } else {
-      sendResponse(200, "Hello world!");
+      sendResponse(200, "Hello world!", response);
     }
 
   } else if (urlPath === '/'){
-      if (request.method === 'GET') {
-        response.writeHead(200, {
-          'Content-Type': 'text/html'
-        });
-        var file = fs.createReadStream(__dirname + "/client/index.html");
-        file.pipe(response);
-      }
+    if (request.method === 'GET') {
+      getMsg(request, response);
+    }
 
-  } else if (contentT[urlPath]) {
-      sendUrlResponse(urlPath, response);
-  } else {
-    sendResponse(404, "Resource not found");
+  } else{
+    otherResponse(urlPath, response);
   }
-  
+
   console.log("Serving request type " + request.method + " for url " + path);
 
 };
